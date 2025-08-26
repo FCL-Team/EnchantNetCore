@@ -317,7 +317,11 @@ public final class EnchantNet {
             f.addAction(GuestVpnService.ACTION_CALLBACK_SUCCESS);
             f.addAction(GuestVpnService.ACTION_CALLBACK_FAIL);
             f.addAction(GuestVpnService.ACTION_CALLBACK_STOP);
-            app.registerReceiver(receiver, f);
+            if (android.os.Build.VERSION.SDK_INT >= 33) {
+                app.registerReceiver(receiver, f, Context.RECEIVER_NOT_EXPORTED);
+            } else {
+                app.registerReceiver(receiver, f);
+            }
         } else {
             try { app.unregisterReceiver(receiver); } catch (Throwable ignored) {}
         }
