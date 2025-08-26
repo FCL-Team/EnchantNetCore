@@ -9,16 +9,18 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.net.Uri;
+import android.net.VpnService;
 import android.os.Build;
 import android.os.PowerManager;
 import android.provider.Settings;
+import android.util.Log;
 
 import androidx.activity.ComponentActivity;
-import androidx.activity.result.ActivityResultCallback;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
@@ -81,19 +83,39 @@ public final class PermissionUtils {
 
     private @Nullable Set<String> manifestDeclared; // cached manifest permissions
 
+    private androidx.activity.result.ActivityResultLauncher<android.content.Intent> vpnLauncher;
+    private Runnable vpnGrantedAction, vpnDeniedAction;
+
     private PermissionUtils(@NonNull Activity activity) {
         this.activity = activity;
         this.useActivityResultApi = (activity instanceof ComponentActivity);
         this.prefs = activity.getSharedPreferences("perm_utils_prefs", Context.MODE_PRIVATE);
 
+        if (activity instanceof ComponentActivity)
+            vpnLauncher = ((ComponentActivity) activity).registerForActivityResult(
+                    new androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult(),
+                    res -> {
+                        boolean granted = res.getResultCode() == android.app.Activity.RESULT_OK
+                                || android.net.VpnService.prepare(activity) == null;
+                        Runnable r = granted ? vpnGrantedAction : vpnDeniedAction;
+                        if (r != null) r.run();
+                        vpnGrantedAction = vpnDeniedAction = null;
+                    });
+        if (activity instanceof AppCompatActivity)
+            vpnLauncher = ((ComponentActivity) activity).registerForActivityResult(
+                    new androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult(),
+                    res -> {
+                        boolean granted = res.getResultCode() == android.app.Activity.RESULT_OK
+                                || android.net.VpnService.prepare(activity) == null;
+                        Runnable r = granted ? vpnGrantedAction : vpnDeniedAction;
+                        if (r != null) r.run();
+                        vpnGrantedAction = vpnDeniedAction = null;
+                    });
+
         if (useActivityResultApi) {
             this.launcher = ((ComponentActivity) activity).registerForActivityResult(
                     new ActivityResultContracts.RequestMultiplePermissions(),
-                    new ActivityResultCallback<Map<String, Boolean>>() {
-                        @Override public void onActivityResult(Map<String, Boolean> grantMap) {
-                            handleActivityResultMap(grantMap);
-                        }
-                    }
+                    this::handleActivityResultMap
             );
         }
     }
@@ -175,6 +197,27 @@ public final class PermissionUtils {
     /** One-tap request for app's common runtime permissions (currently only POST_NOTIFICATIONS on API 33+). */
     public void requestAppPermissions(@NonNull Callbacks callbacks) {
         request(getDefaultRuntimePermissions(), callbacks);
+    }
+
+    public boolean isVpnPermissionGranted() {
+        return VpnService.prepare(activity) == null;
+    }
+
+    public void requestVpnPermission(@androidx.annotation.NonNull Runnable onGranted,
+                                     @androidx.annotation.Nullable Runnable onDenied) {
+        if (vpnLauncher == null) {
+            Log.e("PermissionUtils", "vpnLauncher == null, use AppCompatActivity!");
+            return;
+        }
+
+        Intent intent = VpnService.prepare(activity);
+        if (intent == null) {
+            onGranted.run();
+            return;
+        }
+        this.vpnGrantedAction = onGranted;
+        this.vpnDeniedAction = onDenied;
+        vpnLauncher.launch(intent);
     }
 
     /** Request notifications (POST_NOTIFICATIONS) if API >= 33; no-op otherwise. */

@@ -8,7 +8,6 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
-import android.net.VpnService;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -146,7 +145,7 @@ public final class EnchantNet {
         ensureReceivers(true);
 
         // VPN consent first, then start Guest VPN service.
-        ensureVpnThen(() -> startGuestService(invite));
+        startGuestService(invite);
         return true;
     }
 
@@ -168,35 +167,6 @@ public final class EnchantNet {
             }
         }
         resetToWaiting("manual_stop");
-    }
-
-    // ===== VPN consent only =====
-    private void ensureVpnThen(@NonNull Runnable onGranted) {
-        Intent intent = VpnService.prepare(app);
-        if (intent == null) {
-            onGranted.run();
-            return;
-        }
-        try {
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        } catch (Throwable ignored) {
-        }
-        try {
-            app.startActivity(intent);
-        } catch (Throwable ignored) {
-        }
-
-        final long deadline = System.currentTimeMillis() + 30_000L;
-        main.post(new Runnable() {
-            @Override public void run() {
-                if (VpnService.prepare(app) == null)
-                    onGranted.run();
-                else if (System.currentTimeMillis() > deadline)
-                    failStart("vpn_consent_timeout");
-                else
-                    main.postDelayed(this, 200);
-            }
-        });
     }
 
     // ===== Host flow: scanning → invite → VPN → HostVpnService =====
@@ -249,8 +219,7 @@ public final class EnchantNet {
             return;
         }
 
-        // Ask for VPN consent right before starting the host VPN.
-        ensureVpnThen(() -> startHostService(gamePort, r.name, r.secret, code));
+        startHostService(gamePort, r.name, r.secret, code);
     }
 
     private void startHostService(int gamePort, @NonNull String networkName, @NonNull String networkSecret, @NonNull String code) {
