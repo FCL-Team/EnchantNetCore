@@ -19,7 +19,7 @@ import androidx.core.content.ContextCompat;
 
 import org.fcl.enchantnetcore.core.FakeLanBroadcaster;
 import org.fcl.enchantnetcore.core.RoomKind;
-import org.fcl.enchantnetcore.easytier.EasytierAPI;
+import org.fcl.enchantnetcore.easytier.EasyTierAPI;
 import org.fcl.enchantnetcore.utils.IpUtils;
 
 import java.io.IOException;
@@ -275,7 +275,7 @@ public class GuestVpnService extends VpnService {
         }
 
         // Start EasyTier Guest
-        int rc = EasytierAPI.startEasytierGuest(
+        int rc = EasyTierAPI.startEasyTierGuest(
                 instanceName,
                 networkName,
                 networkSecret,
@@ -322,7 +322,7 @@ public class GuestVpnService extends VpnService {
 
         // checkConn on LOCAL FORWARD PORT
         connTask = exec.scheduleWithFixedDelay(() -> {
-            boolean ok = EasytierAPI.checkConn(localForwardPort, (int) CHECK_CONN_INTERVAL_MS);
+            boolean ok = EasyTierAPI.checkConn(localForwardPort, (int) CHECK_CONN_INTERVAL_MS);
             if (ok) {
                 if (!connOK.get()) Log.d(TAG, "checkConn OK (forwardPort=" + localForwardPort + ")");
                 connOK.set(true);
@@ -344,7 +344,7 @@ public class GuestVpnService extends VpnService {
 
         // isAlive
         aliveTask = exec.scheduleWithFixedDelay(() -> {
-            boolean ok = EasytierAPI.isAlive();
+            boolean ok = EasyTierAPI.isAlive();
             if (ok) {
                 if (!aliveOK.get()) Log.d(TAG, "isAlive OK");
                 aliveOK.set(true);
@@ -382,7 +382,7 @@ public class GuestVpnService extends VpnService {
     private boolean doSetTunFd() {
         try {
             tunDupPfd = ParcelFileDescriptor.dup(vpnPfd.getFileDescriptor());
-            int setRc = EasytierAPI.setTunFd(instanceName, tunDupPfd);
+            int setRc = EasyTierAPI.setTunFd(instanceName, tunDupPfd);
             if (setRc != 0) {
                 Log.e(TAG, "setTunFd rc=" + setRc);
                 return false;
@@ -408,7 +408,7 @@ public class GuestVpnService extends VpnService {
         if (aliveTask != null) aliveTask.cancel(true);
         if (exec != null) exec.shutdownNow();
 
-        try { EasytierAPI.stopEasytier(); } catch (Throwable ignore) {}
+        try { EasyTierAPI.stopEasyTier(); } catch (Throwable ignore) {}
 
         // close fds
         try { if (tunDupPfd != null) tunDupPfd.close(); } catch (IOException ignore) {}

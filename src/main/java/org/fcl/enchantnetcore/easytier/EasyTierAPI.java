@@ -14,9 +14,9 @@ import java.util.Collections;
 import java.util.Enumeration;
 import java.util.UUID;
 
-public class EasytierAPI {
+public class EasyTierAPI {
 
-    public static final String TAG = "EasytierAPI";
+    public static final String TAG = "EasyTierAPI";
 
     private static final String[] DEFAULT_PEERS = new String[]{
             "tcp://public.easytier.top:11010",
@@ -39,7 +39,7 @@ public class EasytierAPI {
      * @param secret       secret
      * @return 0 on success, non-zero on failure (same as runNetworkInstance)
      */
-    public static int startEasytierHost(String instanceName, String networkName, String secret) {
+    public static int startEasyTierHost(String instanceName, String networkName, String secret) {
         StringBuilder sb = new StringBuilder();
 
         // Core instance settings
@@ -97,7 +97,7 @@ public class EasytierAPI {
      * @param ipv4         requested guest IPv4 without CIDR (e.g. "10.144.144.183")
      * @return 0 on success, non-zero on failure (same as runNetworkInstance)
      */
-    public static int startEasytierGuest(
+    public static int startEasyTierGuest(
             String instanceName,
             String networkName,
             String secret,
@@ -196,7 +196,7 @@ public class EasytierAPI {
      *
      * @return true on success (native returns 0), false otherwise.
      */
-    public static boolean stopEasytier() {
+    public static boolean stopEasyTier() {
         try {
             int rc = NativeBridge.retainNetworkInstance(new String[0]);
             return rc == 0; // 0 = success per native API

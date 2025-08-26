@@ -15,7 +15,7 @@ import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
 
 import org.fcl.enchantnetcore.R;
-import org.fcl.enchantnetcore.easytier.EasytierAPI;
+import org.fcl.enchantnetcore.easytier.EasyTierAPI;
 
 import java.util.Objects;
 import java.util.concurrent.ScheduledExecutorService;
@@ -247,7 +247,7 @@ public class HostVpnService extends VpnService {
         }
 
         // Start EasyTier Host
-        int rc = EasytierAPI.startEasytierHost(instanceName, networkName, networkSecret);
+        int rc = EasyTierAPI.startEasyTierHost(instanceName, networkName, networkSecret);
         Log.d(TAG, "startEasytierHost rc=" + rc);
         if (rc != 0) {
             Log.e(TAG, "Failed to start EasyTier host instance.");
@@ -295,7 +295,7 @@ public class HostVpnService extends VpnService {
 
         // checkConn every 200ms
         connTask = exec.scheduleWithFixedDelay(() -> {
-            boolean ok = EasytierAPI.checkConn(gamePort, (int) CHECK_CONN_INTERVAL_MS);
+            boolean ok = EasyTierAPI.checkConn(gamePort, (int) CHECK_CONN_INTERVAL_MS);
             if (ok) {
                 if (!connOK.get()) Log.d(TAG, "checkConn OK.");
                 connOK.set(true);
@@ -319,7 +319,7 @@ public class HostVpnService extends VpnService {
 
         // isAlive every 1s
         aliveTask = exec.scheduleWithFixedDelay(() -> {
-            boolean ok = EasytierAPI.isAlive();
+            boolean ok = EasyTierAPI.isAlive();
             if (ok) {
                 if (!aliveOK.get()) Log.d(TAG, "isAlive OK.");
                 aliveOK.set(true);
@@ -357,7 +357,7 @@ public class HostVpnService extends VpnService {
     private boolean doSetTunFd() {
         try {
             tunDupPfd = ParcelFileDescriptor.dup(vpnPfd.getFileDescriptor());
-            int setRc = EasytierAPI.setTunFd(instanceName, tunDupPfd);
+            int setRc = EasyTierAPI.setTunFd(instanceName, tunDupPfd);
             if (setRc != 0) {
                 Log.e(TAG, "setTunFd rc=" + setRc);
                 return false;
@@ -528,7 +528,7 @@ public class HostVpnService extends VpnService {
         vpnPfd = null;
 
         try {
-            boolean ret = EasytierAPI.stopEasytier();
+            boolean ret = EasyTierAPI.stopEasyTier();
             if (!ret)
                 Log.w(TAG, "The Easytier instance might not have terminated properly.");
             else
