@@ -92,7 +92,7 @@ public class GuestVpnService extends VpnService {
     private static final int   VPN_MTU                 = 1300;
 
     // ==== Probes ====
-    private static final long CHECK_CONN_INTERVAL_MS   = 200L;
+    private static final long CHECK_CONN_INTERVAL_MS   = 2000L;
     private static final long IS_ALIVE_INTERVAL_MS     = 1000L;
     private static final long BOOT_TIMEOUT_MS          = 10_000L;
     private static final int  CONN_FAILS_TO_LOST       = 3;
@@ -447,14 +447,15 @@ public class GuestVpnService extends VpnService {
         vpnPfd = null;
 
         // notifications
-        NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
         if (selfStop) {
-            sendStop();
-            nm.cancel(NOTIF_ID);
+            NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+            if (selfStop) {
+                sendStop();
+                nm.cancel(NOTIF_ID);
+            }
         }
         // failure path keeps the failure notice
 
-        stopForeground(STOP_FOREGROUND_REMOVE);
         stopSelf();
     }
 
@@ -517,6 +518,7 @@ public class GuestVpnService extends VpnService {
     private void showConnFailNotification() { showFailNotification(titleFailConn, textFailConn); }
 
     private void showFailNotification(String title, String text) {
+        stopForeground(true);
         ensureChannel();
         Notification.Builder b = new Notification.Builder(this, CHANNEL_ID)
                 .setSmallIcon(notifIcon)

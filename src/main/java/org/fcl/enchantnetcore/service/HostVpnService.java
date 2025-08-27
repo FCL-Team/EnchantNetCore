@@ -473,21 +473,6 @@ public class HostVpnService extends VpnService {
         Log.d(TAG, "updateNotification() id=" + NOTIF_ID + (established ? " [connected]" : " [connecting]"));
     }
 
-    /** Re-notify current persistent notice every 5s (connecting/connected only). */
-    private void ensurePersistentNotice() {
-        if (failureShown) {
-            Log.d(TAG, "ensurePersistentNotice(): failureShown=true, skip.");
-            return;
-        }
-        if (established) {
-            Log.d(TAG, "ensurePersistentNotice(): repost connected notice.");
-            updateNotification(buildConnectedNotification());
-        } else {
-            Log.d(TAG, "ensurePersistentNotice(): repost connecting notice.");
-            updateNotification(buildConnectingNotification());
-        }
-    }
-
     private void ensureChannel() {
         NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
         nm.createNotificationChannel(new NotificationChannel(CHANNEL_ID, "EnchantNet", NotificationManager.IMPORTANCE_LOW));
