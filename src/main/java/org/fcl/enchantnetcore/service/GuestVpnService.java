@@ -201,7 +201,8 @@ public class GuestVpnService extends VpnService {
     public void onCreate() {
         super.onCreate();
         stopReqReceiver = new BroadcastReceiver() {
-            @Override public void onReceive(Context ctx, Intent it) {
+            @Override
+            public void onReceive(Context ctx, Intent it) {
                 selfStop = true;
                 shutdown("USER_STOP_BUTTON");
             }

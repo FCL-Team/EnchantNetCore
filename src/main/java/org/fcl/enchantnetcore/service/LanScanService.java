@@ -80,7 +80,8 @@ public class LanScanService extends Service {
     public void onCreate() {
         super.onCreate();
         stopReceiver = new android.content.BroadcastReceiver() {
-            @Override public void onReceive(Context context, Intent intent) {
+            @Override
+            public void onReceive(Context context, Intent intent) {
                 if (ACTION_STOP.equals(intent.getAction())) {
                     stopScanAndSelf();
                 }
