@@ -306,7 +306,18 @@ public class GuestVpnService extends VpnService {
     @Nullable
     @Override
     public IBinder onBind(Intent intent) {
+        final String action = intent != null ? intent.getAction() : null;
+        if (VpnService.SERVICE_INTERFACE.equals(action)) {
+            return super.onBind(intent);
+        }
         return null;
+    }
+
+    @Override
+    public void onRevoke() {
+        Log.w(TAG, "onRevoke(): preempted by another VPN or revoked by user; tearing down.");
+        selfStop = true;
+        shutdown("ON_REVOKE");
     }
 
     // ========================= Probing =========================

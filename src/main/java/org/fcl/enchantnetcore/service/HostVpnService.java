@@ -276,8 +276,19 @@ public class HostVpnService extends VpnService {
     @Nullable
     @Override
     public IBinder onBind(Intent intent) {
-        Log.d(TAG, "onBind() not supported.");
+        final String action = intent != null ? intent.getAction() : null;
+        if (VpnService.SERVICE_INTERFACE.equals(action)) {
+            return super.onBind(intent);
+        }
         return null;
+    }
+
+    @Override
+    public void onRevoke() {
+        Log.w(TAG, "onRevoke(): preempted by another VPN or revoked by user; tearing down.");
+        selfStop = true;
+        failureShown = false;
+        shutdown("ON_REVOKE");
     }
 
     // ===== Probing =====
