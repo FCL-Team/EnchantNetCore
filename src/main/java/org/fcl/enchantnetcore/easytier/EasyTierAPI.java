@@ -4,6 +4,7 @@ import android.os.ParcelFileDescriptor;
 import android.util.Log;
 
 import org.fcl.enchantnetcore.core.RoomKind;
+import org.json.JSONObject;
 
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -235,45 +236,75 @@ public class EasyTierAPI {
      * - error_msg is empty
      * - my_node_info.virtual_ipv4 is non-empty and not "null"
      * Returns true if all conditions are satisfied.
-     * NOTE: This function depends on collect_network_infos() exposing flattened key/value pairs.
      */
     public static boolean isAlive() {
         try {
-            // Pull K/V pairs from native. Use a generous upper bound.
             NativeBridge.NetworkInfo[] infos = NativeBridge.getNetworkInfos(512);
             if (infos == null || infos.length == 0) return false;
 
-            String virtualIp = "";
-            String errorMsg  = "";
-            Boolean running  = null;
+            JSONObject root = null;
 
+            // 1) Scan all values; try to extract and parse JSON from each value string
             for (NativeBridge.NetworkInfo kv : infos) {
                 if (kv == null) continue;
-                String k = safe(kv.key).toLowerCase();
                 String v = safe(kv.value);
-
-                // running flag (accept "true"/"1")
-                if (equalsKey(k, "running")) {
-                    running = parseBool(v);
-                }
-
-                // virtual IPv4 (any key that contains "virtual_ipv4")
-                if (k.contains("virtual_ipv4")) {
-                    if (!isNullOrEmptyOrLiteralNull(v)) {
-                        virtualIp = v.trim();
+                String cand = extractJSONObjectString(v);
+                if (cand == null) continue;
+                try {
+                    JSONObject obj = new JSONObject(cand);
+                    // Heuristic: pick the first object that looks like the status root
+                    if (obj.has("running") || obj.has("my_node_info")) {
+                        root = obj;
+                        break;
                     }
-                }
-
-                // error message (accept "error_msg" or keys ending with ".error_msg")
-                if (equalsKey(k, "error_msg") || k.endsWith(".error_msg")) {
-                    errorMsg = v.trim();
+                } catch (Throwable ignore) {
+                    // Not a valid JSON object; keep looking
                 }
             }
 
-            if (running == null || !running) return false;
-            if (isNullOrEmptyOrLiteralNull(virtualIp)) return false;
-            return isNullOrEmptyOrLiteralNull(errorMsg);
+            if (root == null) return false;
+
+            // 2) running flag (accept true/1/yes)
+            boolean running = parseBoolFromJson(root.opt("running"));
+
+            // 3) error message (treat null/empty/"null"/"none"/"nil" as no error)
+            String errorMsg = null;
+            if (!root.isNull("error_msg")) {
+                Object em = root.opt("error_msg");
+                errorMsg = (em == null) ? null : String.valueOf(em);
+            }
+
+            // 4) virtual IPv4 presence:
+            //    A) numeric uint32 at my_node_info.virtual_ipv4.address.addr (non-zero)
+            //    B) dotted IPv4 string (optionally with "/len") not equal to 0.0.0.0
+            boolean hasV4 = false;
+            JSONObject myNode = root.optJSONObject("my_node_info");
+            if (myNode != null) {
+                Object v4 = myNode.opt("virtual_ipv4");
+                if (v4 instanceof JSONObject) {
+                    JSONObject v4obj = (JSONObject) v4;
+                    // A) numeric form
+                    JSONObject addrObj = v4obj.optJSONObject("address");
+                    long addr = (addrObj == null) ? 0L : addrObj.optLong("addr", 0L);
+                    hasV4 = addr != 0L;
+                    // B) dotted IPv4 string fallback (some builds may expose "ip": "10.144.144.2")
+                    if (!hasV4) {
+                        String ip = v4obj.optString("ip", "");
+                        hasV4 = looksLikeIPv4(ip) && !"0.0.0.0".equals(ip);
+                    }
+                } else if (v4 instanceof String) {
+                    // B) dotted IPv4 string or "ip/prefixlen"
+                    String s = ((String) v4).trim();
+                    String ip = s.contains("/") ? s.substring(0, s.indexOf('/')) : s;
+                    hasV4 = looksLikeIPv4(ip) && !"0.0.0.0".equals(ip) && !isNullish(ip);
+                }
+            }
+
+            if (!running) return false;
+            if (!hasV4) return false;
+            return isNullish(errorMsg);
         } catch (Throwable t) {
+            // Any exception -> consider not alive
             return false;
         }
     }
@@ -304,24 +335,48 @@ public class EasyTierAPI {
         return s.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 
-    private static String safe(String s) {
-        return s == null ? "" : s;
+    private static String safe(Object s) {
+        return (s == null) ? "" : String.valueOf(s);
     }
 
-    private static boolean equalsKey(String k, String expected) {
-        // exact match or dotted-tail match, e.g. "my_node_info.running"
-        return k.equals(expected) || k.endsWith("." + expected);
+    /** Extract a JSON object substring from arbitrary text (first '{' .. last '}'). */
+    private static String extractJSONObjectString(String raw) {
+        if (raw == null) return null;
+        int start = raw.indexOf('{');
+        int end = raw.lastIndexOf('}');
+        if (start < 0 || end <= start) return null;
+        return raw.substring(start, end + 1);
     }
 
-    private static boolean isNullOrEmptyOrLiteralNull(String s) {
-        if (s == null) return true;
-        String t = s.trim();
-        return t.isEmpty() || "null".equalsIgnoreCase(t);
-    }
-
-    private static boolean parseBool(String s) {
-        if (s == null) return false;
-        String t = s.trim().toLowerCase();
+    /** Parse a boolean from JSON value; accepts true/1/yes (case-insensitive). */
+    private static boolean parseBoolFromJson(Object v) {
+        if (v instanceof Boolean) return (Boolean) v;
+        String t = safe(v).trim().toLowerCase(java.util.Locale.ROOT);
         return "true".equals(t) || "1".equals(t) || "yes".equals(t);
+    }
+
+    /** Treat null/empty/"null"/"none"/"nil" (case-insensitive) as null-ish. */
+    private static boolean isNullish(String v) {
+        if (v == null) return true;
+        String t = v.trim();
+        if (t.isEmpty()) return true;
+        String tl = t.toLowerCase(java.util.Locale.ROOT);
+        return "null".equals(tl) || "none".equals(tl) || "nil".equals(tl);
+    }
+
+    /** Loose IPv4 check: dotted-quad with each octet 0..255. */
+    private static boolean looksLikeIPv4(String v) {
+        String t = safe(v).trim();
+        if (!t.matches("\\d+\\.\\d+\\.\\d+\\.\\d+")) return false;
+        try {
+            String[] parts = t.split("\\.");
+            for (String p : parts) {
+                int n = Integer.parseInt(p);
+                if (n < 0 || n > 255) return false;
+            }
+            return true;
+        } catch (Exception ignore) {
+            return false;
+        }
     }
 }
