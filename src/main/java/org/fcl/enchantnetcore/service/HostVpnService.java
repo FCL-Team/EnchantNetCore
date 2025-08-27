@@ -87,6 +87,7 @@ public class HostVpnService extends VpnService {
     private static final String CHANNEL_ID                    = "enchantnet_channel";
     private static final int NOTIF_ID                         = 20011;
     private static final int REQ_STOP                         = 10001;
+    private static final String ACTION_REPOST                 = PREFIX + ".HOST_NOTIF_REPOST";
     private static final String ACTION_REQ_STOP               = PREFIX + ".HOST_REQ_STOP";
 
     private BroadcastReceiver stopReqReceiver;
@@ -96,7 +97,6 @@ public class HostVpnService extends VpnService {
     private ScheduledFuture<?> bootTimeoutTask;
     private ScheduledFuture<?> connTask;
     private ScheduledFuture<?> aliveTask;
-    private ScheduledFuture<?> notifKeepTask; // keep persistent notices alive
 
     private volatile boolean established = false;
     private final AtomicBoolean connOK  = new AtomicBoolean(false);
@@ -199,6 +199,14 @@ public class HostVpnService extends VpnService {
         if (intent == null) return START_NOT_STICKY;
 
         final String action = intent.getAction();
+        if (ACTION_REPOST.equals(action)) {
+            Log.d(TAG, "Notification repost; refreshing foreground");
+            startForeground(
+                    NOTIF_ID,
+                    established ? buildConnectedNotification() : buildConnectingNotification()
+            );
+            return START_NOT_STICKY;
+        }
         if (!Objects.equals(action, ACTION_START)) {
             Log.w(TAG, "Unknown action: " + action + " -> stopSelf()");
             stopSelf();
@@ -275,10 +283,6 @@ public class HostVpnService extends VpnService {
 
         // Boot probing
         startBootProbing();
-
-        // Keep persistent notice alive (repost every 5s)
-        notifKeepTask = exec.scheduleWithFixedDelay(this::ensurePersistentNotice, 5, 5, TimeUnit.SECONDS);
-        Log.d(TAG, "Notification keep-alive task scheduled (5s).");
 
         return START_STICKY;
     }
@@ -401,23 +405,40 @@ public class HostVpnService extends VpnService {
     // ===== Persistent notices =====
     private Notification buildConnectingNotification() {
         ensureChannel();
-        Notification.Builder b = new Notification.Builder(this, CHANNEL_ID);
-        Notification n = b.setSmallIcon(notifIconResId)
-                .setOngoing(true) // non-clearable
+        PendingIntent deletePending = PendingIntent.getService(
+                this, 2001,
+                new Intent(this, HostVpnService.class).setAction(ACTION_REPOST),
+                PendingIntent.FLAG_IMMUTABLE
+        );
+
+        Notification.Builder b = new Notification.Builder(this, CHANNEL_ID)
+                .setSmallIcon(notifIconResId)
+                .setOngoing(true)
                 .setContentTitle(connectingTitle)
                 .setContentText(connectingText)
-                .build();
-        Log.d(TAG, "buildConnectingNotification()");
-        return n;
+                .setDeleteIntent(deletePending);
+
+        if (android.os.Build.VERSION.SDK_INT >= 31) {
+            b.setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE);
+        }
+        return b.build();
     }
+
 
     private Notification buildConnectedNotification() {
         ensureChannel();
-        Notification.Builder b = new Notification.Builder(this, CHANNEL_ID);
-        b.setSmallIcon(notifIconResId)
-         .setOngoing(true) // non-clearable
-         .setContentTitle(connectedTitle)
-         .setContentText(connectedText);
+        PendingIntent deletePending = PendingIntent.getService(
+                this, 2002,
+                new Intent(this, HostVpnService.class).setAction(ACTION_REPOST),
+                PendingIntent.FLAG_IMMUTABLE
+        );
+
+        Notification.Builder b = new Notification.Builder(this, CHANNEL_ID)
+                .setSmallIcon(notifIconResId)
+                .setOngoing(true)
+                .setContentTitle(connectedTitle)
+                .setContentText(connectedText)
+                .setDeleteIntent(deletePending);
 
         // Exit button
         PendingIntent stopPi = PendingIntent.getBroadcast(
@@ -440,6 +461,9 @@ public class HostVpnService extends VpnService {
             b.addAction(new Notification.Action.Builder(null, copyBtnText, copyPi).build());
         }
         Log.d(TAG, "buildConnectedNotification()");
+        if (android.os.Build.VERSION.SDK_INT >= 31) {
+            b.setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE);
+        }
         return b.build();
     }
 
@@ -550,7 +574,6 @@ public class HostVpnService extends VpnService {
         try { if (bootTimeoutTask != null) bootTimeoutTask.cancel(true); } catch (Throwable t) { Log.w(TAG, "cancel bootTimeoutTask err", t); }
         try { if (connTask != null)        connTask.cancel(true); }      catch (Throwable t) { Log.w(TAG, "cancel connTask err", t); }
         try { if (aliveTask != null)       aliveTask.cancel(true); }     catch (Throwable t) { Log.w(TAG, "cancel aliveTask err", t); }
-        try { if (notifKeepTask != null)   notifKeepTask.cancel(true); } catch (Throwable t) { Log.w(TAG, "cancel notifKeepTask err", t); }
         try { if (exec != null)            exec.shutdownNow(); }         catch (Throwable t) { Log.w(TAG, "exec.shutdownNow err", t); }
 
         try { if (tunDupPfd != null) { Log.d(TAG, "Closing dup FD " + tunDupPfd.getFd()); tunDupPfd.close(); } } catch (Throwable t) { Log.w(TAG, "close dup fd err", t); }
