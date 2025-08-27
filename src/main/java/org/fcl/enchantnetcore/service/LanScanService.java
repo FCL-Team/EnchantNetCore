@@ -5,6 +5,7 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
@@ -36,6 +37,7 @@ public class LanScanService extends Service {
     // ===== Intent actions =====
     private static final String ACTION_START           = PREFIX + ".LanScanService.ACTION_START";
     private static final String ACTION_STOP            = PREFIX + ".LanScanService.ACTION_STOP";
+    private static final String ACTION_REPOST          = PREFIX + ".LanScanService.ACTION_REPOST";
 
     // ===== Intent extras (public contract) =====
     public static final String EXTRA_RESULT_RECEIVER   = "result_receiver";      // ResultReceiver
@@ -69,11 +71,26 @@ public class LanScanService extends Service {
     private LanScanner scanner;
     private ResultReceiver receiver;
     private boolean wifiLockEnabled = true;
+    private Intent lastNotifIntent;
+    private volatile boolean isStopping = false;
+    private int currentNotifId = DEFAULT_NOTIF_ID;
+    private BroadcastReceiver stopReceiver;
 
     @Override
     public void onCreate() {
         super.onCreate();
-        Log.d(TAG, "onCreate");
+        stopReceiver = new android.content.BroadcastReceiver() {
+            @Override public void onReceive(Context context, Intent intent) {
+                if (ACTION_STOP.equals(intent.getAction())) {
+                    stopScanAndSelf();
+                }
+            }
+        };
+        if (android.os.Build.VERSION.SDK_INT >= 33) {
+            registerReceiver(stopReceiver, new android.content.IntentFilter(ACTION_STOP), Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            registerReceiver(stopReceiver, new android.content.IntentFilter(ACTION_STOP));
+        }
     }
 
     @Override
@@ -83,8 +100,11 @@ public class LanScanService extends Service {
             return START_NOT_STICKY;
         }
         final String action = intent.getAction();
-        if (ACTION_STOP.equals(action)) {
-            stopScanAndSelf();
+        if (ACTION_REPOST.equals(action)) {
+            if (isStopping || scanner == null)
+                return START_NOT_STICKY;
+            Intent src = (lastNotifIntent != null) ? lastNotifIntent : new Intent(this, LanScanService.class);
+            startForegroundWithNotification(src);  // 重新拉回前台
             return START_NOT_STICKY;
         }
         if (ACTION_START.equals(action)) {
@@ -100,7 +120,7 @@ public class LanScanService extends Service {
     public void onDestroy() {
         super.onDestroy();
         Log.d(TAG, "onDestroy");
-        stopScanInternal();
+        stopScanAndSelf();
     }
 
     @Nullable
@@ -133,8 +153,8 @@ public class LanScanService extends Service {
 
     /** Stop if running. */
     public static void stop(Context ctx) {
-        Intent i = new Intent(ctx, LanScanService.class).setAction(ACTION_STOP);
-        ctx.startService(i);
+        Intent i = new Intent(ACTION_STOP).setPackage(ctx.getPackageName());
+        ctx.sendBroadcast(i);
     }
 
     // ====================== Internals ======================
@@ -173,8 +193,20 @@ public class LanScanService extends Service {
     }
 
     private void stopScanAndSelf() {
+        if (isStopping) return;
+        isStopping = true;
+
+        try { unregisterReceiver(stopReceiver); } catch (Throwable ignored) {}
+
         stopScanInternal();
-        stopForeground(true);
+
+        try { stopForeground(true); } catch (Throwable ignored) {}
+
+        try {
+            NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            if (nm != null) nm.cancel(currentNotifId);
+        } catch (Throwable ignored) {}
+
         stopSelf();
     }
 
@@ -218,6 +250,9 @@ public class LanScanService extends Service {
         final String text = intent.getStringExtra(EXTRA_NOTIF_TEXT) != null
                 ? intent.getStringExtra(EXTRA_NOTIF_TEXT) : "Searching on LAN…";
 
+        this.lastNotifIntent = new Intent(intent);
+        this.currentNotifId = notifId;   // ← 记录ID，供 stop 时兜底 cancel
+
         final NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         if (nm != null) {
             NotificationChannel ch = new NotificationChannel(chId, chName, NotificationManager.IMPORTANCE_LOW);
@@ -235,9 +270,29 @@ public class LanScanService extends Service {
                 .setCategory(NotificationCompat.CATEGORY_SERVICE)
                 .setPriority(NotificationCompat.PRIORITY_LOW);
         if (tapPi != null) b.setContentIntent(tapPi);
+
+        PendingIntent deletePi = PendingIntent.getService(
+                this, 3001, new Intent(this, LanScanService.class).setAction(ACTION_REPOST),
+                PendingIntent.FLAG_IMMUTABLE);
+        b.setDeleteIntent(deletePi);
+        if (android.os.Build.VERSION.SDK_INT >= 31) {
+            b.setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE);
+        }
+
         Notification notif = b.build();
+        notif.flags |= Notification.FLAG_NO_CLEAR | Notification.FLAG_ONGOING_EVENT;
 
         // No foreground service type flags -> compatible down to minSdk 26
-        startForeground(notifId, notif);
+        if (android.os.Build.VERSION.SDK_INT >= 29) {
+            androidx.core.app.ServiceCompat.startForeground(
+                    this,
+                    notifId,
+                    notif,
+                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+            );
+        } else {
+            startForeground(notifId, notif);
+        }
+
     }
 }
