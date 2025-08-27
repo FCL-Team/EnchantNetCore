@@ -6,8 +6,10 @@ import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
+import android.content.BroadcastReceiver;
 import android.content.Intent;
 import android.content.Context;
+import android.content.IntentFilter;
 import android.net.VpnService;
 import android.os.IBinder;
 import android.os.ParcelFileDescriptor;
@@ -50,7 +52,6 @@ public class GuestVpnService extends VpnService {
 
     // ==== Actions / extras (public API) ====
     public static final String ACTION_START            = PREFIX + ".GUEST_START";
-    public static final String ACTION_STOP             = PREFIX + ".GUEST_STOP";
 
     // callbacks
     public static final String ACTION_CALLBACK_SUCCESS = PREFIX + ".GUEST_CALLBACK_SUCCESS";
@@ -101,6 +102,9 @@ public class GuestVpnService extends VpnService {
     private static final int NOTIF_ID                  = 20021;
     private static final int REQ_STOP                  = 20101;
     private static final String ACTION_REPOST          = PREFIX + ".GUEST_NOTIF_REPOST";
+    private static final String ACTION_REQ_STOP        = PREFIX + ".GUEST_REQ_STOP";
+
+    private BroadcastReceiver stopReqReceiver;
 
     // ==== State ====
     private ScheduledExecutorService exec;
@@ -188,21 +192,33 @@ public class GuestVpnService extends VpnService {
     }
 
     public static void stopGuest(Context ctx) {
-        ContextCompat.startForegroundService(ctx, new Intent(ctx, GuestVpnService.class).setAction(ACTION_STOP));
+        ctx.stopService(new Intent(ctx, GuestVpnService.class));
     }
 
     // ========================= Lifecycle =========================
+
+    @Override
+    public void onCreate() {
+        super.onCreate();
+        stopReqReceiver = new BroadcastReceiver() {
+            @Override public void onReceive(Context ctx, Intent it) {
+                selfStop = true;
+                shutdown("USER_STOP_BUTTON");
+            }
+        };
+        IntentFilter f = new IntentFilter(ACTION_REQ_STOP);
+        if (android.os.Build.VERSION.SDK_INT >= 33) {
+            registerReceiver(stopReqReceiver, f, Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            registerReceiver(stopReqReceiver, f);
+        }
+    }
+
     @Override
     public int onStartCommand(@Nullable Intent intent, int flags, int startId) {
         if (intent == null) return START_NOT_STICKY;
 
         String act = intent.getAction();
-        if (ACTION_STOP.equals(act)) {
-            Log.i(TAG, "ACTION_STOP received");
-            selfStop = true;
-            shutdown("STOP_INTENT");
-            return START_NOT_STICKY;
-        }
         if (ACTION_REPOST.equals(act)) {
             if (vpnPfd != null) {
                 Log.d(TAG, "Notification repost; refreshing foreground");
@@ -410,6 +426,8 @@ public class GuestVpnService extends VpnService {
     private void shutdown(String reason) {
         Log.w(TAG, "Shutdown: " + reason + ", established=" + established + ", selfStop=" + selfStop);
 
+        try { unregisterReceiver(stopReqReceiver); } catch (Throwable ignore) {}
+
         // stop fake broadcaster
         stopFakeBroadcast();
 
@@ -456,10 +474,13 @@ public class GuestVpnService extends VpnService {
                 .setDeleteIntent(deletePending);
 
         // Exit
-        PendingIntent stopPi = PendingIntent.getService(this, REQ_STOP,
-                new Intent(this, GuestVpnService.class).setAction(ACTION_STOP),
-                PendingIntent.FLAG_IMMUTABLE);
-        b.addAction(new Notification.Action.Builder(null, "Exit", stopPi).build());
+        PendingIntent stopPi = PendingIntent.getBroadcast(
+                this,
+                REQ_STOP,
+                new Intent(ACTION_REQ_STOP).setPackage(getPackageName()),
+                PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT
+        );
+        b.addAction(new Notification.Action.Builder(null, exitBtnText, stopPi).build());
         return b.build();
     }
 
@@ -480,9 +501,12 @@ public class GuestVpnService extends VpnService {
                 // Exit
                 .addAction(new Notification.Action.Builder(
                         null, exitBtnText,
-                        PendingIntent.getService(this, REQ_STOP,
-                                new Intent(this, GuestVpnService.class).setAction(ACTION_STOP),
-                                PendingIntent.FLAG_IMMUTABLE)
+                        PendingIntent.getBroadcast(
+                                this,
+                                REQ_STOP,
+                                new Intent(ACTION_REQ_STOP).setPackage(getPackageName()),
+                                PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT
+                        )
                 ).build())
                 .build();
     }

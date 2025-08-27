@@ -4,6 +4,7 @@ import static android.text.TextUtils.isEmpty;
 
 import android.app.Activity;
 import android.app.Application;
+import android.app.NotificationManager;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -166,12 +167,18 @@ public final class EnchantNet {
             } catch (Throwable ignored) {
             }
         }
+        try {
+            NotificationManager nm = app.getSystemService(NotificationManager.class);
+            nm.cancelAll();
+        } catch (Throwable ignore) {
+        }
         resetToWaiting("manual_stop");
     }
 
     // ===== Host flow: scanning → invite → VPN → HostVpnService =====
     private final ResultReceiver scanReceiver = new ResultReceiver(main) {
-        @Override protected void onReceiveResult(int resultCode, Bundle resultData) {
+        @Override
+        protected void onReceiveResult(int resultCode, Bundle resultData) {
             if (resultCode == Activity.RESULT_OK) {
                 int port = resultData != null ? resultData.getInt(LanScanService.RESULT_KEY_PORT, -1) : -1;
                 if (port > 0)

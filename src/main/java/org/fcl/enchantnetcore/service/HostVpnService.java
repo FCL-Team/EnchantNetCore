@@ -4,6 +4,8 @@ import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
+import android.content.BroadcastReceiver;
+import android.content.IntentFilter;
 import android.net.VpnService;
 import android.os.IBinder;
 import android.os.ParcelFileDescriptor;
@@ -40,7 +42,6 @@ public class HostVpnService extends VpnService {
 
     // ===== Actions & Extras =====
     public static final String ACTION_START                   = PREFIX + ".HOST_START";
-    public static final String ACTION_STOP                    = PREFIX + ".HOST_STOP";
 
     public static final String ACTION_CALLBACK_SUCCESS        = PREFIX + ".HOST_CALLBACK_SUCCESS";
     public static final String ACTION_CALLBACK_FAIL           = PREFIX + ".HOST_CALLBACK_FAIL";
@@ -86,6 +87,9 @@ public class HostVpnService extends VpnService {
     private static final String CHANNEL_ID                    = "enchantnet_channel";
     private static final int NOTIF_ID                         = 20011;
     private static final int REQ_STOP                         = 10001;
+    private static final String ACTION_REQ_STOP               = PREFIX + ".HOST_REQ_STOP";
+
+    private BroadcastReceiver stopReqReceiver;
 
     // ===== State =====
     private ScheduledExecutorService exec;
@@ -166,22 +170,35 @@ public class HostVpnService extends VpnService {
     /** Proactively stop; sends STOP callback (not FAIL). */
     public static void stopHost(Context ctx) {
         Log.d(TAG, "stopHost() called");
-        ContextCompat.startForegroundService(ctx, new Intent(ctx, HostVpnService.class).setAction(ACTION_STOP));
+        ctx.stopService(new Intent(ctx, HostVpnService.class));
     }
 
     // ===== Lifecycle =====
+
+    @Override
+    public void onCreate() {
+        super.onCreate();
+        stopReqReceiver = new BroadcastReceiver() {
+            @Override public void onReceive(Context ctx, Intent it) {
+                selfStop = true;
+                failureShown = false;
+                shutdown("USER_STOP_BUTTON");
+            }
+        };
+        IntentFilter f = new IntentFilter(ACTION_REQ_STOP);
+        if (android.os.Build.VERSION.SDK_INT >= 33) {
+            registerReceiver(stopReqReceiver, f, Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            registerReceiver(stopReqReceiver, f);
+        }
+    }
+
     @Override
     public int onStartCommand(@Nullable Intent intent, int flags, int startId) {
         Log.d(TAG, "onStartCommand() flags=" + flags + ", startId=" + startId + ", intent=" + (intent == null ? "null" : intent.getAction()));
         if (intent == null) return START_NOT_STICKY;
 
         final String action = intent.getAction();
-        if (ACTION_STOP.equals(action)) {
-            Log.i(TAG, "Received ACTION_STOP; initiating shutdown.");
-            selfStop = true;
-            shutdown("STOP_INTENT");
-            return START_NOT_STICKY;
-        }
         if (!Objects.equals(action, ACTION_START)) {
             Log.w(TAG, "Unknown action: " + action + " -> stopSelf()");
             stopSelf();
@@ -403,11 +420,11 @@ public class HostVpnService extends VpnService {
          .setContentText(connectedText);
 
         // Exit button
-        PendingIntent stopPi = PendingIntent.getService(
+        PendingIntent stopPi = PendingIntent.getBroadcast(
                 this,
                 REQ_STOP,
-                new Intent(this, HostVpnService.class).setAction(ACTION_STOP),
-                PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_CANCEL_CURRENT
+                new Intent(ACTION_REQ_STOP).setPackage(getPackageName()),
+                PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT
         );
         b.addAction(new Notification.Action.Builder(null, exitBtnText, stopPi).build());
 
@@ -527,6 +544,9 @@ public class HostVpnService extends VpnService {
     // ===== Teardown =====
     private synchronized void shutdown(String tag) {
         Log.w(TAG, "shutdown() tag=" + tag + " selfStop=" + selfStop + " established=" + established + " failureShown=" + failureShown);
+
+        try { unregisterReceiver(stopReqReceiver); } catch (Throwable ignore) {}
+
         try { if (bootTimeoutTask != null) bootTimeoutTask.cancel(true); } catch (Throwable t) { Log.w(TAG, "cancel bootTimeoutTask err", t); }
         try { if (connTask != null)        connTask.cancel(true); }      catch (Throwable t) { Log.w(TAG, "cancel connTask err", t); }
         try { if (aliveTask != null)       aliveTask.cancel(true); }     catch (Throwable t) { Log.w(TAG, "cancel aliveTask err", t); }
