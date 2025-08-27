@@ -22,7 +22,8 @@
             android:name="org.fcl.enchantnetcore.service.HostVpnService"
             android:permission="android.permission.BIND_VPN_SERVICE"
             android:process=":enchantnet_host"
-            android:exported="true">
+            android:exported="true"
+            android:foregroundServiceType="connectedDevice|dataSync">
             <intent-filter>
                 <action android:name="android.net.VpnService" />
             </intent-filter>
@@ -31,7 +32,8 @@
             android:name="org.fcl.enchantnetcore.service.GuestVpnService"
             android:permission="android.permission.BIND_VPN_SERVICE"
             android:process=":enchantnet_guest"
-            android:exported="true">
+            android:exported="true"
+            android:foregroundServiceType="connectedDevice|dataSync">
             <intent-filter>
                 <action android:name="android.net.VpnService" />
             </intent-filter>

@@ -282,6 +282,7 @@ public final class EnchantNet {
             f.addAction(HostVpnService.ACTION_CALLBACK_SUCCESS);
             f.addAction(HostVpnService.ACTION_CALLBACK_FAIL);
             f.addAction(HostVpnService.ACTION_CALLBACK_STOP);
+            f.addAction(HostVpnService.ACTION_COPY_INVITE);
             // Guest callbacks
             f.addAction(GuestVpnService.ACTION_CALLBACK_SUCCESS);
             f.addAction(GuestVpnService.ACTION_CALLBACK_FAIL);
@@ -305,6 +306,11 @@ public final class EnchantNet {
                 mapHostFail(i.getStringExtra(HostVpnService.EXTRA_FAIL_REASON)); emit();
             } else if (HostVpnService.ACTION_CALLBACK_STOP.equals(a)) {
                 resetToWaiting("host_stop");
+            } else if (HostVpnService.ACTION_COPY_INVITE.equals(a)) {
+                String code = i.getStringExtra("invite_code");
+                if (code != null) {
+                    copyInviteCode(code);
+                }
             } else if (GuestVpnService.ACTION_CALLBACK_SUCCESS.equals(a)) {
                 state = EnchantNetState.GUESTING; exception = null; message = null;
                 backupServer = i.getStringExtra(GuestVpnService.EXTRA_BACKUP_SERVER);
@@ -361,6 +367,15 @@ public final class EnchantNet {
         for (EnchantNetStateListener l : listeners.toArray(new EnchantNetStateListener[0])) {
             try {
                 l.onStateChanged(s);
+            } catch (Throwable ignored) {
+            }
+        }
+    }
+
+    private void copyInviteCode(String inviteCode) {
+        for (EnchantNetStateListener l : listeners.toArray(new EnchantNetStateListener[0])) {
+            try {
+                l.onCopyInviteCode(inviteCode);
             } catch (Throwable ignored) {
             }
         }

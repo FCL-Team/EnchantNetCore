@@ -502,7 +502,7 @@ public class GuestVpnService extends VpnService {
 
     // ========================= Callbacks =========================
     private void sendSuccess(String backupServer) {
-        Intent it = new Intent(ACTION_CALLBACK_SUCCESS).putExtra(EXTRA_BACKUP_SERVER, backupServer);
+        Intent it = new Intent(ACTION_CALLBACK_SUCCESS).setPackage(getPackageName()).putExtra(EXTRA_BACKUP_SERVER, backupServer);
         sendBroadcast(it);
     }
 
@@ -513,13 +513,13 @@ public class GuestVpnService extends VpnService {
             case "CONNECTION_LOST": showConnFailNotification(); break;
             case "TIMEOUT": default: showBootFailNotification(); break;
         }
-        Intent it = new Intent(ACTION_CALLBACK_FAIL).putExtra(EXTRA_FAIL_REASON, reason);
+        Intent it = new Intent(ACTION_CALLBACK_FAIL).setPackage(getPackageName()).putExtra(EXTRA_FAIL_REASON, reason);
         sendBroadcast(it);
     }
 
     private void sendStop() {
         Log.i(TAG, "Callback STOP (proactive)");
-        sendBroadcast(new Intent(ACTION_CALLBACK_STOP));
+        sendBroadcast(new Intent(ACTION_CALLBACK_STOP).setPackage(getPackageName()));
     }
 
     // ========================= Fake LAN broadcaster =========================

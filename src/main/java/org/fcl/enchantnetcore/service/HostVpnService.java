@@ -45,6 +45,7 @@ public class HostVpnService extends VpnService {
     public static final String ACTION_CALLBACK_SUCCESS        = PREFIX + ".HOST_CALLBACK_SUCCESS";
     public static final String ACTION_CALLBACK_FAIL           = PREFIX + ".HOST_CALLBACK_FAIL";
     public static final String ACTION_CALLBACK_STOP           = PREFIX + ".HOST_CALLBACK_STOP";
+    public static final String ACTION_COPY_INVITE             = PREFIX + ".ACTION_COPY_INVITE_CODE";
 
     public static final String EXTRA_FAIL_REASON              = "reason"; // "TIMEOUT" | "START_ERROR" | "CONNECTION_LOST" | "EASYTIER_CRASH"
 
@@ -85,7 +86,6 @@ public class HostVpnService extends VpnService {
     private static final String CHANNEL_ID                    = "enchantnet_channel";
     private static final int NOTIF_ID                         = 20011;
     private static final int REQ_STOP                         = 10001;
-    private static final String ACTION_COPY_INVITE            = PREFIX + ".ACTION_COPY_INVITE_CODE";
 
     // ===== State =====
     private ScheduledExecutorService exec;
@@ -402,7 +402,7 @@ public class HostVpnService extends VpnService {
 
         // Copy invite button
         if (!isEmpty(inviteCode)) {
-            Intent copy = new Intent(ACTION_COPY_INVITE).putExtra("invite_code", inviteCode);
+            Intent copy = new Intent(ACTION_COPY_INVITE).setPackage(getPackageName()).putExtra("invite_code", inviteCode);
             PendingIntent copyPi = PendingIntent.getBroadcast(
                     this,
                     (int) (System.currentTimeMillis() & 0x7fffffff),
@@ -483,7 +483,7 @@ public class HostVpnService extends VpnService {
 
     // ===== Callbacks =====
     private void sendSuccess() {
-        Intent i = new Intent(ACTION_CALLBACK_SUCCESS);
+        Intent i = new Intent(ACTION_CALLBACK_SUCCESS).setPackage(getPackageName());
         i.putExtra(EXTRA_GAME_PORT, gamePort);
         i.putExtra(EXTRA_INVITE_CODE, inviteCode);
         sendBroadcast(i);
@@ -500,14 +500,14 @@ public class HostVpnService extends VpnService {
             case "CONNECTION_LOST": showFailureNoticeConn(); break;
             case "TIMEOUT": default: showFailureNoticeBoot(); break;
         }
-        Intent i = new Intent(ACTION_CALLBACK_FAIL);
+        Intent i = new Intent(ACTION_CALLBACK_FAIL).setPackage(getPackageName());
         i.putExtra(EXTRA_FAIL_REASON, reason);
         sendBroadcast(i);
         Log.i(TAG, "Callback FAIL sent. reason=" + reason);
     }
 
     private void sendStop() {
-        Intent i = new Intent(ACTION_CALLBACK_STOP);
+        Intent i = new Intent(ACTION_CALLBACK_STOP).setPackage(getPackageName());
         i.putExtra(EXTRA_INVITE_CODE, inviteCode);
         sendBroadcast(i);
         Log.i(TAG, "Callback STOP sent.");
