@@ -291,8 +291,6 @@ public class HostVpnService extends VpnService {
     @Override
     public void onDestroy() {
         Log.w(TAG, "onDestroy()");
-        selfStop = true;
-        failureShown = false;
         shutdown("onDestroy");
         super.onDestroy();
     }

@@ -316,7 +316,6 @@ public class GuestVpnService extends VpnService {
 
     @Override
     public void onDestroy() {
-        selfStop = true;
         shutdown("onDestroy");
         super.onDestroy();
     }
