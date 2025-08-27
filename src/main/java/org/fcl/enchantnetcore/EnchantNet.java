@@ -94,6 +94,19 @@ public final class EnchantNet {
         this.guestNotice = gn;
     }
 
+    // ===== Info =====
+    public String getDevelopers() {
+        return LibraryInfo.DEVELOPERS;
+    }
+
+    public String getCoreVersion() {
+        return LibraryInfo.CORE_VERSION;
+    }
+
+    public int getCoreVersionCode() {
+        return LibraryInfo.CORE_VERSION_CODE;
+    }
+
     // ===== Observe =====
     public void addListener(@NonNull EnchantNetStateListener l) {
         listeners.add(l);
