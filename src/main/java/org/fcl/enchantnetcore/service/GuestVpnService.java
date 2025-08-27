@@ -192,7 +192,7 @@ public class GuestVpnService extends VpnService {
     }
 
     public static void stopGuest(Context ctx) {
-        ctx.stopService(new Intent(ctx, GuestVpnService.class));
+        ctx.sendBroadcast(new Intent(GuestVpnService.ACTION_REQ_STOP).setPackage(ctx.getPackageName()));
     }
 
     // ========================= Lifecycle =========================
@@ -316,6 +316,7 @@ public class GuestVpnService extends VpnService {
 
     @Override
     public void onDestroy() {
+        selfStop = true;
         shutdown("onDestroy");
         super.onDestroy();
     }

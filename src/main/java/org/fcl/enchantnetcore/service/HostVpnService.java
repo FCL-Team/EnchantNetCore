@@ -170,7 +170,7 @@ public class HostVpnService extends VpnService {
     /** Proactively stop; sends STOP callback (not FAIL). */
     public static void stopHost(Context ctx) {
         Log.d(TAG, "stopHost() called");
-        ctx.stopService(new Intent(ctx, HostVpnService.class));
+        ctx.sendBroadcast(new Intent(HostVpnService.ACTION_REQ_STOP).setPackage(ctx.getPackageName()));
     }
 
     // ===== Lifecycle =====
@@ -291,6 +291,8 @@ public class HostVpnService extends VpnService {
     @Override
     public void onDestroy() {
         Log.w(TAG, "onDestroy()");
+        selfStop = true;
+        failureShown = false;
         shutdown("onDestroy");
         super.onDestroy();
     }
