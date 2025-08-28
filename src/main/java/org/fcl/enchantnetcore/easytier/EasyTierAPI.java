@@ -9,10 +9,7 @@ import org.json.JSONObject;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
-import java.net.NetworkInterface;
 import java.net.Socket;
-import java.util.Collections;
-import java.util.Enumeration;
 import java.util.UUID;
 
 public class EasyTierAPI {
@@ -139,13 +136,11 @@ public class EasyTierAPI {
         sb.append("bind_addr = \"[::]:").append(localPort).append("\"\n");
         sb.append("dst_addr = \"").append(hostIp).append(":").append(remotePort).append("\"\n\n");
 
-        // Port forward (IPv4) — only add if device has any IPv4 interface to avoid bind errors
-        if (deviceHasIPv4()) {
-            sb.append("[[port_forward]]\n");
-            sb.append("proto = \"tcp\"\n");
-            sb.append("bind_addr = \"0.0.0.0:").append(localPort).append("\"\n");
-            sb.append("dst_addr = \"").append(hostIp).append(":").append(remotePort).append("\"\n\n");
-        }
+        // Port forward (IPv4)
+        sb.append("[[port_forward]]\n");
+        sb.append("proto = \"tcp\"\n");
+        sb.append("bind_addr = \"0.0.0.0:").append(localPort).append("\"\n");
+        sb.append("dst_addr = \"").append(hostIp).append(":").append(remotePort).append("\"\n\n");
 
         // Extra peer for room_kind == PCL2CE
         if (roomKind == RoomKind.PCL2CE) {
@@ -310,24 +305,6 @@ public class EasyTierAPI {
     }
 
     // ---------- helpers ----------
-
-    private static boolean deviceHasIPv4() {
-        try {
-            Enumeration<NetworkInterface> en = NetworkInterface.getNetworkInterfaces();
-            if (en == null) return false;
-            for (NetworkInterface nif : Collections.list(en)) {
-                if (!nif.isUp() || nif.isLoopback()) continue;
-                var addrs = nif.getInetAddresses();
-                while (addrs.hasMoreElements()) {
-                    String host = addrs.nextElement().getHostAddress();
-                    if (host != null && host.indexOf(':') < 0) { // crude IPv4 check
-                        return true;
-                    }
-                }
-            }
-        } catch (Throwable ignored) {}
-        return false;
-    }
 
     private static String escape(String s) {
         if (s == null) return "";
