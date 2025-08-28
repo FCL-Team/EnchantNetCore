@@ -92,10 +92,10 @@ public class GuestVpnService extends VpnService {
     private static final int   VPN_MTU                 = 1300;
 
     // ==== Probes ====
-    private static final long CHECK_CONN_INTERVAL_MS   = 2000L;
+    private static final long CHECK_CONN_INTERVAL_MS   = 5000L;
     private static final long IS_ALIVE_INTERVAL_MS     = 1000L;
-    private static final long BOOT_TIMEOUT_MS          = 10_000L;
-    private static final int  CONN_FAILS_TO_LOST       = 3;
+    private static final long BOOT_TIMEOUT_MS          = 25_000L;
+    private static final int  CONN_FAILS_TO_LOST       = 5;
 
     // ==== Notification ====
     private static final String CHANNEL_ID             = "enchantnet_channel";
@@ -563,8 +563,12 @@ public class GuestVpnService extends VpnService {
     // ========================= Fake LAN broadcaster =========================
     private void startFakeBroadcast(int forwardPort, String motd) {
         stopFakeBroadcast();
-        broadcaster = new FakeLanBroadcaster(getApplicationContext(), forwardPort, motd);
-        broadcaster.start();
+        FakeLanBroadcaster.Options opts = new FakeLanBroadcaster.Options();
+        opts.enableIpv6Multicast = true;
+        opts.enableGlobalBroadcast = true;
+        opts.enableLoopback = false;
+        broadcaster = new FakeLanBroadcaster(getApplicationContext(), this, opts);
+        broadcaster.start(motd, localForwardPort);
         Log.d(TAG, "FakeLanBroadcaster started, port=" + forwardPort + ", motd=" + motd);
     }
 
