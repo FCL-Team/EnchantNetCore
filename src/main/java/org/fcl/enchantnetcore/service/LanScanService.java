@@ -41,7 +41,8 @@ public class LanScanService extends Service {
 
     // ===== Intent extras (public contract) =====
     public static final String EXTRA_RESULT_RECEIVER   = "result_receiver";      // ResultReceiver
-    public static final String EXTRA_MULTICAST_ADDR    = "multicast_addr";       // String, default 224.0.2.60
+    public static final String EXTRA_MULTICAST_ADDR_V4 = "multicast_addr_v4";    // String, default 224.0.2.60
+    public static final String EXTRA_MULTICAST_ADDR_V6 = "multicast_addr_v6";    // String, default FF75:230::60
     public static final String EXTRA_MULTICAST_PORT    = "multicast_port";       // int, default 4445
     public static final String EXTRA_POLL_INTERVAL_MS  = "poll_interval_ms";     // int, default 200
     public static final String EXTRA_USE_WIFI_LOCK     = "use_wifi_lock";        // boolean, default true
@@ -60,7 +61,8 @@ public class LanScanService extends Service {
     public static final String RESULT_KEY_ERROR        = "error";
 
     // ===== Defaults =====
-    private static final String DEFAULT_MC_ADDR        = "224.0.2.60";
+    private static final String DEFAULT_MC_ADDR_V4     = "224.0.2.60";
+    private static final String DEFAULT_MC_ADDR_V6     = "FF75:230::60";
     private static final int    DEFAULT_MC_PORT        = 4445;
     private static final int    DEFAULT_POLL_MS        = 200;
     private static final int    DEFAULT_NOTIF_ID       = 1001;
@@ -165,14 +167,16 @@ public class LanScanService extends Service {
         stopScanInternal();
 
         receiver = intent.getParcelableExtra(EXTRA_RESULT_RECEIVER);
-        final String mcAddr = intent.getStringExtra(EXTRA_MULTICAST_ADDR) != null
-                ? intent.getStringExtra(EXTRA_MULTICAST_ADDR) : DEFAULT_MC_ADDR;
+        final String mcAddrV4 = intent.getStringExtra(EXTRA_MULTICAST_ADDR_V4) != null
+                ? intent.getStringExtra(EXTRA_MULTICAST_ADDR_V4) : DEFAULT_MC_ADDR_V4;
+        final String mcAddrV6 = intent.getStringExtra(EXTRA_MULTICAST_ADDR_V6) != null
+                ? intent.getStringExtra(EXTRA_MULTICAST_ADDR_V6) : DEFAULT_MC_ADDR_V6;
         final int mcPort = intent.getIntExtra(EXTRA_MULTICAST_PORT, DEFAULT_MC_PORT);
         final int pollMs = intent.getIntExtra(EXTRA_POLL_INTERVAL_MS, DEFAULT_POLL_MS);
         wifiLockEnabled = intent.getBooleanExtra(EXTRA_USE_WIFI_LOCK, true);
 
         scanner = new LanScanner();
-        scanner.setMulticastTarget(mcAddr, mcPort);
+        scanner.setMulticastTarget(mcAddrV4, mcAddrV6, mcPort);
         scanner.setPollIntervalMs(pollMs);
         if (wifiLockEnabled) scanner.acquireWifiMulticastLock(getApplicationContext());
 
